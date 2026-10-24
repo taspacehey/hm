@@ -14,7 +14,7 @@
   body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);}
   .hidden{display:none !important}
 
-  /* ---------- লগইন ---------- */
+  /* ---------- login ---------- */
   #lock{min-height:100%;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(135deg,#075e54,#128c7e)}
   .box{background:var(--card);padding:28px 24px;border-radius:16px;width:100%;max-width:360px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.25)}
   .box h1{margin:0 0 6px;font-size:28px}
@@ -24,12 +24,11 @@
   .box button:disabled{opacity:.6}
   #err{color:#b91c1c;font-size:14px;min-height:20px;margin-top:10px}
 
-  /* ---------- অ্যাপ ---------- */
+  /* ---------- app ---------- */
   #app{height:100%;display:flex;flex-direction:column}
   header{background:var(--bar);color:#fff;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:max(10px,env(safe-area-inset-top))}
   header b{font-size:20px}
-  header .btns{display:flex;gap:6px}
-  header button{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:8px;padding:6px 11px;font:inherit;font-size:15px;cursor:pointer}
+  header button{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:8px;padding:6px 12px;font:inherit;font-size:15px;cursor:pointer}
   #list{flex:1;overflow-y:auto;padding:12px 10px;display:flex;flex-direction:column;gap:6px}
   .day{align-self:center;background:#e1f2fb;color:#475569;font-size:12px;padding:3px 12px;border-radius:999px;margin:8px 0}
   .empty{align-self:center;color:var(--muted);margin-top:40px;font-size:14px}
@@ -38,26 +37,28 @@
   .bubble.mine{align-self:flex-end;background:var(--mine);border-top-right-radius:2px}
   .bubble.other{align-self:flex-start;border-top-left-radius:2px}
   .meta{display:flex;justify-content:flex-end;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-top:2px;white-space:normal}
-  .meta .who{font-weight:600}
   .meta .del{cursor:pointer;opacity:.6}
   .meta .del:hover{opacity:1;color:#b91c1c}
   .bubble.failed{outline:2px solid #ef4444;cursor:pointer}
 
   .pic{display:block;max-width:100%;max-height:300px;min-width:120px;min-height:80px;border-radius:8px;background:#e5e7eb;cursor:zoom-in;color:var(--muted);font-size:12px}
-  .callbtn{margin-top:6px;border:0;border-radius:8px;padding:7px 16px;background:var(--bar);color:#fff;font:inherit;font-size:14px;cursor:pointer}
+  .vid{display:block;max-width:100%;max-height:320px;border-radius:8px;background:#000}
+  audio{display:block;width:240px;max-width:100%;height:40px}
+  .mbtn{border:0;border-radius:8px;padding:8px 16px;background:var(--bar);color:#fff;font:inherit;font-size:14px;cursor:pointer}
 
   #viewer{position:fixed;inset:0;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;z-index:50;cursor:zoom-out}
   #viewer img{max-width:96%;max-height:96%;border-radius:6px}
 
   form{display:flex;gap:8px;padding:8px 10px;background:#f0f2f5;padding-bottom:max(8px,env(safe-area-inset-bottom))}
   textarea{flex:1;resize:none;border:0;border-radius:20px;padding:10px 14px;font:inherit;font-size:16px;max-height:120px;min-height:44px;outline:none}
-  form button{border:0;border-radius:50%;width:46px;height:46px;background:var(--bar);color:#fff;font-size:20px;cursor:pointer;align-self:flex-end}
+  form button{border:0;border-radius:50%;width:46px;height:46px;background:var(--bar);color:#fff;font-size:20px;cursor:pointer;align-self:flex-end;flex:none}
   form button.attach{background:#fff;color:var(--bar);box-shadow:0 1px 2px rgba(0,0,0,.15)}
+  form button.attach.on{background:#dc2626;color:#fff}
 </style>
 </head>
 <body>
 
-<!-- পাসওয়ার্ড পর্দা -->
+<!-- password screen -->
 <div id="lock">
   <div class="box">
     <h1>🔒</h1>
@@ -68,21 +69,18 @@
   </div>
 </div>
 
-<!-- মূল অ্যাপ -->
+<!-- main app -->
 <div id="app" class="hidden">
   <header>
     <b>🔒</b>
-    <div class="btns">
-      <button id="callV" title="Voice call">📞</button>
-      <button id="callVid" title="Video call">🎥</button>
-      <button id="lockBtn">Lock</button>
-    </div>
+    <button id="lockBtn">Lock</button>
   </header>
   <div id="list"></div>
   <form id="form">
-    <button type="button" class="attach" id="attach" aria-label="Photo">📎</button>
-    <input type="file" id="file" accept="image/*" hidden>
+    <button type="button" class="attach" id="attach" aria-label="Photo or video">📎</button>
+    <input type="file" id="file" accept="image/*,video/*" hidden>
     <textarea id="ta" rows="1" maxlength="3000" placeholder="Write a note..."></textarea>
+    <button type="button" class="attach" id="mic" aria-label="Voice message">🎤</button>
     <button type="submit" aria-label="Send">➤</button>
   </form>
 </div>
@@ -90,28 +88,31 @@
 <div id="viewer" class="hidden"><img id="viewerImg" alt=""></div>
 
 <script>
-/* ============ সেটিংস ============ */
+/* ============ settings ============ */
 const API_URL = 'https://script.google.com/macros/s/AKfycbwX8yKc-If4xp08pCor3V16yvZC7dVPVqyZAdKNb3NYZ4AwPkmVxoN6gM4ctoBwbKtP/exec';
-const SALT = 'gopon-note-v1-salt';   // সব ডিভাইসে একই থাকতে হবে, বদলাবেন না
-const POLL_MS = 5000;                // কত সেকেন্ড পর পর নতুন নোট দেখবে
-const IMG_MAX = 1280;                // ছবির সর্বোচ্চ মাপ (পিক্সেল)
-const IMG_QUALITY = 0.72;            // ছবির মান (০ থেকে ১)
-/* ================================= */
+const SALT = 'gopon-note-v1-salt';   // must be the same on every device, do not change
+const POLL_MS = 5000;                // how often to check for new messages
+const IMG_MAX = 1280;                // max photo size in pixels
+const IMG_QUALITY = 0.72;            // photo quality (0 to 1)
+const VIDEO_MAX_MB = 15;             // max video size
+const VOICE_MAX_SEC = 300;           // max voice message length
+const PLACEHOLDER = 'Write a note...';
+/* ================================== */
 
 const enc = new TextEncoder(), dec = new TextDecoder();
 const $ = id => document.getElementById(id);
 let key = null;
-let room = '';
 let messages = [];
 let lastSig = '';
-const cache = new Map();     // id -> পেলোড অবজেক্ট
-const imgUrls = new Map();   // id -> ছবির blob URL
-const loading = new Set();   // যে ছবি লোড হচ্ছে
-const pending = new Set();   // সার্ভারে যায়নি এমন নোট
-const deleted = new Set();   // ডিলিট করা নোট
+let dirty = false;
+const cache = new Map();      // id -> payload object
+const mediaUrls = new Map();  // id -> blob URL (photo / video / voice)
+const loading = new Set();    // media being downloaded
+const pending = new Set();    // not yet on the server
+const deleted = new Set();    // deleted locally
 let timer = null;
 
-/* এই ডিভাইসের পরিচয় (প্রতিটি ডিভাইসে আলাদা) */
+/* identity of this device (different on every device) */
 const myDevice = (function () {
   try {
     let d = localStorage.getItem('gn_device');
@@ -123,7 +124,7 @@ const myDevice = (function () {
   } catch (e) { return 'd-tmp-' + Math.random().toString(36).slice(2); }
 })();
 
-/* ---------- এনক্রিপশন (AES-GCM) ---------- */
+/* ---------- encryption (AES-GCM) ---------- */
 function toB64(buf) {
   const b = new Uint8Array(buf); let s = '';
   for (let i = 0; i < b.length; i += 8192) s += String.fromCharCode.apply(null, b.subarray(i, i + 8192));
@@ -152,16 +153,7 @@ async function decryptBytes(b64) {
 const encryptText = t => encryptBytes(enc.encode(t));
 const decryptText = async b64 => dec.decode(await decryptBytes(b64));
 
-/* কল-রুমের নাম: পাসওয়ার্ড থেকে তৈরি, তাই শুধু পাসওয়ার্ড জানা লোকই একই রুমে যাবে */
-async function roomFor(pw) {
-  const h = await crypto.subtle.digest('SHA-256', enc.encode(SALT + ':room:' + pw));
-  return 'gn' + Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 20);
-}
-function callUrl(video) {
-  return 'https://meet.jit.si/' + room + '#config.startWithVideoMuted=' + (video ? 'false' : 'true');
-}
-
-/* পেলোড: সাধারণ লেখা, নইলে {"gn":1,"type":"img"|"call",...} */
+/* payload: plain text, or {"gn":1,"type":"img"|"vid"|"aud",...} */
 function parsePayload(s) {
   if (s.indexOf('{"gn":1') === 0) {
     try { const o = JSON.parse(s); if (o && o.type) return o; } catch (e) {}
@@ -169,7 +161,7 @@ function parsePayload(s) {
   return { type: 'txt', x: s };
 }
 
-/* ---------- Google Sheet/Drive-এর সাথে যোগাযোগ ---------- */
+/* ---------- talk to Google Sheet / Drive ---------- */
 async function apiGet() {
   const r = await fetch(API_URL, { cache: 'no-store' });
   return r.json();
@@ -183,7 +175,7 @@ async function apiPost(body) {
   return r.json();
 }
 
-/* ---------- সিঙ্ক ---------- */
+/* ---------- sync ---------- */
 async function sync() {
   const rows = await apiGet();
   const out = [];
@@ -198,7 +190,7 @@ async function sync() {
     }
     out.push({ id: r.id, time: r.time, device: r.device, p });
   }
-  // এখনো সার্ভারে না পৌঁছানো নোট ধরে রাখি
+  // keep messages that have not reached the server yet
   for (const m of messages) {
     if (!seen.has(m.id) && (pending.has(m.id) || m.failed) && !deleted.has(m.id)) out.push(m);
   }
@@ -207,7 +199,7 @@ async function sync() {
   render();
 }
 
-/* ---------- রঙ ---------- */
+/* ---------- colours ---------- */
 const PALETTE = ['#dbeafe', '#fde2e4', '#fef3c7', '#ede9fe', '#cffafe', '#fee2e2'];
 function colorFor(dev) {
   let h = 0;
@@ -215,18 +207,27 @@ function colorFor(dev) {
   return PALETTE[h % PALETTE.length];
 }
 
-/* ---------- ছবি লোড ---------- */
-async function loadImg(m) {
-  if (!m.p.fid || imgUrls.has(m.id) || loading.has(m.id)) return;
+/* ---------- media ---------- */
+function fmtSize(n) { return (n / 1048576).toFixed(1) + ' MB'; }
+function fmtDur(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+
+async function loadMedia(m, manual) {
+  const t = m.p.type;
+  if (!m.p.fid || mediaUrls.has(m.id) || loading.has(m.id)) return;
+  if (t === 'vid' && !manual) return;           // videos load only when tapped
   loading.add(m.id);
   try {
     const r = await fetch(API_URL + '?file=' + encodeURIComponent(m.p.fid), { cache: 'no-store' });
-    const t = await r.text();
-    const bytes = await decryptBytes(t);
-    imgUrls.set(m.id, URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' })));
+    const text = await r.text();
+    const bytes = await decryptBytes(text);
+    const mime = m.p.mime || (t === 'img' ? 'image/jpeg' : '');
+    mediaUrls.set(m.id, URL.createObjectURL(new Blob([bytes], { type: mime })));
+    loading.delete(m.id);
     render(true);
-  } catch (e) { /* পরের বার আবার চেষ্টা হবে */ }
-  loading.delete(m.id);
+  } catch (e) {
+    loading.delete(m.id);
+    if (manual) { alert('Could not load. Try again.'); render(true); }
+  }
 }
 function openViewer(src) {
   if (!src) return;
@@ -234,15 +235,19 @@ function openViewer(src) {
   $('viewer').classList.remove('hidden');
 }
 
-/* ---------- দেখানো ---------- */
+/* ---------- display ---------- */
 function nearBottom() {
   const l = $('list');
   return l.scrollHeight - l.scrollTop - l.clientHeight < 120;
 }
+function mediaBusy() {
+  return Array.prototype.some.call($('list').querySelectorAll('audio,video'), e => !e.paused && !e.ended);
+}
 function render(force) {
-  const sig = messages.map(m => m.id + (m.failed ? 'f' : '') + (pending.has(m.id) ? 'p' : '') + (imgUrls.has(m.id) ? 'i' : '')).join('|');
+  const sig = messages.map(m => m.id + (m.failed ? 'f' : '') + (pending.has(m.id) ? 'p' : '') + (mediaUrls.has(m.id) ? 'i' : '')).join('|');
   if (!force && sig === lastSig) return;
-  lastSig = sig;
+  if (mediaBusy()) { dirty = true; return; }   // do not interrupt playback
+  lastSig = sig; dirty = false;
 
   const l = $('list');
   const stick = nearBottom();
@@ -269,24 +274,43 @@ function render(force) {
     if (!mine) b.style.background = colorFor(m.device);
 
     const p = m.p;
+    const u = mediaUrls.get(m.id);
     if (p.type === 'img') {
       const img = document.createElement('img');
       img.className = 'pic'; img.alt = 'Loading photo...';
-      const u = imgUrls.get(m.id);
       if (u) { img.src = u; img.onclick = ev => { ev.stopPropagation(); openViewer(u); }; }
-      else loadImg(m);
+      else loadMedia(m);
       b.appendChild(img);
-    } else if (p.type === 'call') {
-      const t = document.createElement('div');
-      t.textContent = p.video ? '🎥 Video call started' : '📞 Voice call started';
-      b.appendChild(t);
-      const btn = document.createElement('button');
-      btn.className = 'callbtn'; btn.textContent = 'Join';
-      btn.onclick = ev => { ev.stopPropagation(); window.open(callUrl(!!p.video), '_blank', 'noopener'); };
-      b.appendChild(btn);
-    } else {
+    } else if (p.type === 'vid') {
+      if (u) {
+        const v = document.createElement('video');
+        v.className = 'vid'; v.controls = true; v.playsInline = true; v.preload = 'metadata'; v.src = u;
+        b.appendChild(v);
+      } else {
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'mbtn';
+        btn.textContent = '▶ Load video' + (p.size ? ' (' + fmtSize(p.size) + ')' : '');
+        btn.onclick = ev => { ev.stopPropagation(); btn.textContent = 'Loading...'; loadMedia(m, true); };
+        b.appendChild(btn);
+      }
+    } else if (p.type === 'aud') {
+      if (u) {
+        const a = document.createElement('audio');
+        a.controls = true; a.preload = 'metadata'; a.src = u;
+        b.appendChild(a);
+      } else {
+        const t = document.createElement('div');
+        t.textContent = '🎤 Loading voice message...' + (p.dur ? ' (' + fmtDur(p.dur) + ')' : '');
+        b.appendChild(t);
+        loadMedia(m);
+      }
+    } else if (p.type === 'txt') {
       const t = document.createElement('div');
       t.textContent = p.x;
+      b.appendChild(t);
+    } else {
+      const t = document.createElement('div');
+      t.textContent = '(Unsupported message)';
       b.appendChild(t);
     }
 
@@ -306,10 +330,10 @@ function render(force) {
   if (stick) l.scrollTop = l.scrollHeight;
 }
 
-/* ---------- পাঠানো, মোছা ---------- */
+/* ---------- send, delete ---------- */
 async function pushToServer(m) {
   try {
-    if (m.p.type === 'img' && !m.p.fid) {
+    if (m.p.type !== 'txt' && !m.p.fid) {
       const bytes = new Uint8Array(await m._blob.arrayBuffer());
       const r = await apiPost({ action: 'upload', data: await encryptBytes(bytes) });
       if (!r || !r.ok) throw new Error('upload');
@@ -325,7 +349,7 @@ async function pushToServer(m) {
     pending.delete(m.id);
     m.failed = true;
   }
-  render();
+  render(true);
 }
 function queue(p, extra) {
   const m = { id: 'm' + Date.now() + Math.random().toString(36).slice(2, 7), time: Date.now(), device: myDevice, p };
@@ -333,7 +357,7 @@ function queue(p, extra) {
   cache.set(m.id, p);
   pending.add(m.id);
   messages.push(m);
-  render();
+  render(true);
   $('list').scrollTop = $('list').scrollHeight;
   pushToServer(m);
   return m;
@@ -344,6 +368,14 @@ function send() {
   if (!text) return;
   ta.value = ''; ta.style.height = 'auto';
   queue({ type: 'txt', x: text });
+}
+function sendMedia(type, blob, mime, dur, size) {
+  const p = { gn: 1, type, fid: '', mime };
+  if (dur) p.dur = dur;
+  if (size) p.size = size;
+  const m = queue(p, { _blob: blob });
+  mediaUrls.set(m.id, URL.createObjectURL(blob));
+  render(true);
 }
 function compressImage(file) {
   return new Promise((res, rej) => {
@@ -363,17 +395,16 @@ function compressImage(file) {
     img.src = url;
   });
 }
-async function sendImage(file) {
+async function sendFile(f) {
+  if (f.type.indexOf('video/') === 0) {
+    if (f.size > VIDEO_MAX_MB * 1048576) { alert('Video is too large (max ' + VIDEO_MAX_MB + ' MB). Send a shorter clip.'); return; }
+    sendMedia('vid', f, f.type || 'video/mp4', 0, f.size);
+    return;
+  }
   try {
-    const blob = await compressImage(file);
-    const m = queue({ type: 'img', gn: 1, fid: '' }, { _blob: blob });
-    imgUrls.set(m.id, URL.createObjectURL(blob));
-    render(true);
+    const blob = await compressImage(f);
+    sendMedia('img', blob, 'image/jpeg');
   } catch (e) { alert('Could not send this photo. Try another one.'); }
-}
-function startCall(video) {
-  window.open(callUrl(video), '_blank', 'noopener');
-  queue({ gn: 1, type: 'call', video: !!video });
 }
 function retry(id) {
   const m = messages.find(x => x.id === id);
@@ -388,10 +419,50 @@ async function removeMsg(id) {
   messages = messages.filter(x => x.id !== id);
   render(true);
   try { await apiPost({ action: 'del', id, fid: (m && m.p && m.p.fid) || '' }); }
-  catch (e) { deleted.delete(id); /* পরের সিঙ্কে আবার আসবে */ }
+  catch (e) { deleted.delete(id); /* it will come back on next sync */ }
 }
 
-/* ---------- লগইন ---------- */
+/* ---------- voice message ---------- */
+let rec = null, recChunks = [], recTimer = null, recStart = 0, recStream = null;
+function pickMime() {
+  const c = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm', 'audio/ogg;codecs=opus'];
+  if (!window.MediaRecorder) return '';
+  for (const t of c) { if (MediaRecorder.isTypeSupported(t)) return t; }
+  return '';
+}
+async function toggleRec() {
+  if (rec) { rec.stop(); return; }
+  if (!window.MediaRecorder || !navigator.mediaDevices) { alert('Voice recording is not supported in this browser.'); return; }
+  try { recStream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) { alert('Microphone not allowed.'); return; }
+  const mime = pickMime();
+  rec = new MediaRecorder(recStream, mime ? { mimeType: mime } : undefined);
+  recChunks = [];
+  rec.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
+  rec.onstop = () => {
+    clearInterval(recTimer);
+    recStream.getTracks().forEach(t => t.stop());
+    const type = ((rec && rec.mimeType) || mime || 'audio/webm').split(';')[0];
+    const dur = Math.round((Date.now() - recStart) / 1000);
+    const blob = new Blob(recChunks, { type });
+    rec = null;
+    $('mic').classList.remove('on'); $('mic').textContent = '🎤';
+    $('ta').placeholder = PLACEHOLDER;
+    if (blob.size < 1000 || dur < 1) return;
+    sendMedia('aud', blob, type, dur);
+  };
+  recStart = Date.now();
+  rec.start();
+  $('mic').classList.add('on'); $('mic').textContent = '⏹';
+  recTimer = setInterval(() => {
+    const s = Math.round((Date.now() - recStart) / 1000);
+    $('ta').placeholder = 'Recording... ' + fmtDur(s) + '  (tap ⏹ to send)';
+    if (s >= VOICE_MAX_SEC && rec) rec.stop();
+  }, 500);
+  $('ta').placeholder = 'Recording... 0:00  (tap ⏹ to send)';
+}
+
+/* ---------- login ---------- */
 async function login(pw, auto) {
   if (!pw) return;
   if (API_URL.indexOf('PASTE_') === 0) { $('err').textContent = 'Set API_URL in the code first.'; return; }
@@ -399,7 +470,6 @@ async function login(pw, auto) {
   btn.disabled = true; $('err').textContent = auto ? '' : 'Checking...';
   try {
     key = await deriveKey(pw);
-    room = await roomFor(pw);
     const rows = await apiGet();
     if (rows.length) {
       try { await decryptText(rows[rows.length - 1].data); }
@@ -417,21 +487,22 @@ async function login(pw, auto) {
   btn.disabled = false;
 }
 
-/* ---------- ইভেন্ট ---------- */
+/* ---------- events ---------- */
 $('enter').onclick = () => login($('pw').value, false);
 $('pw').addEventListener('keydown', e => { if (e.key === 'Enter') login($('pw').value, false); });
 $('form').addEventListener('submit', e => { e.preventDefault(); send(); });
 $('ta').addEventListener('input', e => { const t = e.target; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 120) + 'px'; });
 $('ta').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } });
 $('attach').onclick = () => $('file').click();
-$('file').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) sendImage(f); });
-$('callV').onclick = () => startCall(false);
-$('callVid').onclick = () => startCall(true);
+$('file').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) sendFile(f); });
+$('mic').onclick = toggleRec;
 $('viewer').onclick = () => { $('viewer').classList.add('hidden'); $('viewerImg').src = ''; };
 $('lockBtn').onclick = () => { try { sessionStorage.removeItem('gn_pw'); } catch (e) {} location.reload(); };
 document.addEventListener('visibilitychange', () => { if (!document.hidden && key) sync().catch(() => {}); });
+/* when playback stops, apply any update that was waiting */
+['pause', 'ended'].forEach(ev => $('list').addEventListener(ev, () => { if (dirty) render(true); }, true));
 
-/* আগে একই ট্যাবে খোলা থাকলে নিজে থেকেই ঢুকবে */
+/* if this tab was already unlocked, enter automatically */
 try { const saved = sessionStorage.getItem('gn_pw'); if (saved) login(saved, true); } catch (e) {}
 </script>
 </body>
