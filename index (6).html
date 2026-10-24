@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>🔒</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#efeae2; --bar:#075e54; --card:#ffffff; --text:#1f2937; --muted:#6b7280;
+    --mine:#d9fdd3;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{font-family:'Noto Sans Bengali','Nirmala UI',system-ui,sans-serif;background:var(--bg);color:var(--text);}
+  .hidden{display:none !important}
+
+  /* ---------- লগইন ---------- */
+  #lock{min-height:100%;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(135deg,#075e54,#128c7e)}
+  .box{background:var(--card);padding:28px 24px;border-radius:16px;width:100%;max-width:360px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  .box h1{margin:0 0 6px;font-size:22px}
+  .box p{margin:0 0 18px;color:var(--muted);font-size:14px}
+  .box input{width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:10px;font:inherit;font-size:16px;margin-bottom:12px}
+  .box button{width:100%;padding:12px;border:0;border-radius:10px;background:var(--bar);color:#fff;font:inherit;font-size:16px;cursor:pointer}
+  .box button:disabled{opacity:.6}
+  #err{color:#b91c1c;font-size:14px;min-height:20px;margin-top:10px}
+
+  /* ---------- অ্যাপ ---------- */
+  #app{height:100%;display:flex;flex-direction:column}
+  header{background:var(--bar);color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;padding-top:max(12px,env(safe-area-inset-top))}
+  header b{font-size:18px}
+  header button{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:8px;padding:6px 12px;font:inherit;cursor:pointer}
+  #list{flex:1;overflow-y:auto;padding:12px 10px;display:flex;flex-direction:column;gap:6px}
+  .day{align-self:center;background:#e1f2fb;color:#475569;font-size:12px;padding:3px 12px;border-radius:999px;margin:8px 0}
+  .empty{align-self:center;color:var(--muted);margin-top:40px;font-size:14px}
+
+  .bubble{max-width:82%;padding:7px 10px 5px;border-radius:12px;box-shadow:0 1px 1px rgba(0,0,0,.12);word-wrap:break-word;overflow-wrap:anywhere;white-space:pre-wrap;line-height:1.5;font-size:16px}
+  .bubble.mine{align-self:flex-end;background:var(--mine);border-top-right-radius:2px}
+  .bubble.other{align-self:flex-start;border-top-left-radius:2px}
+  .meta{display:flex;justify-content:flex-end;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-top:2px;white-space:normal}
+  .meta .who{font-weight:600}
+  .meta .del{cursor:pointer;opacity:.6}
+  .meta .del:hover{opacity:1;color:#b91c1c}
+  .bubble.failed{outline:2px solid #ef4444;cursor:pointer}
+
+  form{display:flex;gap:8px;padding:8px 10px;background:#f0f2f5;padding-bottom:max(8px,env(safe-area-inset-bottom))}
+  textarea{flex:1;resize:none;border:0;border-radius:20px;padding:10px 14px;font:inherit;font-size:16px;max-height:120px;min-height:44px;outline:none}
+  form button{border:0;border-radius:50%;width:46px;height:46px;background:var(--bar);color:#fff;font-size:20px;cursor:pointer;align-self:flex-end}
+</style>
+</head>
+<body>
+
+<!-- পাসওয়ার্ড পর্দা -->
+<div id="lock">
+  <div class="box">
+    <h1>🔒</h1>
+    <p>পাসওয়ার্ড দিয়ে খুলুন</p>
+    <input id="pw" type="password" placeholder="পাসওয়ার্ড" autocomplete="current-password">
+    <button id="enter">খুলুন</button>
+    <div id="err"></div>
+  </div>
+</div>
+
+<!-- মূল অ্যাপ -->
+<div id="app" class="hidden">
+  <header><b>🔒</b><button id="lockBtn">লক করুন</button></header>
+  <div id="list"></div>
+  <form id="form">
+    <textarea id="ta" rows="1" maxlength="3000" placeholder="নোট লিখুন..."></textarea>
+    <button type="submit" aria-label="পাঠান">➤</button>
+  </form>
+</div>
+
+<script>
+/* ============ সেটিংস ============ */
+// Apps Script ডিপ্লয় করে যে Web App URL পাবেন, সেটা নিচে বসান
+const API_URL = 'https://script.google.com/macros/s/AKfycbwX8yKc-If4xp08pCor3V16yvZC7dVPVqyZAdKNb3NYZ4AwPkmVxoN6gM4ctoBwbKtP/exec';
+const SALT = 'gopon-note-v1-salt';   // সব ডিভাইসে একই থাকতে হবে, বদলাবেন না
+const POLL_MS = 5000;                // কত সেকেন্ড পর পর নতুন নোট দেখবে
+/* ================================= */
+
+const enc = new TextEncoder(), dec = new TextDecoder();
+const $ = id => document.getElementById(id);
+let key = null;
+let messages = [];
+const cache = new Map();     // id -> পড়া যায় এমন লেখা
+const pending = new Set();   // সার্ভারে যায়নি এমন নোট
+const deleted = new Set();   // ডিলিট করা নোট
+let timer = null;
+
+/* এই ডিভাইসের পরিচয় (প্রতিটি ডিভাইসে আলাদা) */
+const myDevice = (function () {
+  try {
+    let d = localStorage.getItem('gn_device');
+    if (!d) {
+      d = 'd-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + Math.random().toString(36).slice(2));
+      localStorage.setItem('gn_device', d);
+    }
+    return d;
+  } catch (e) { return 'd-tmp-' + Math.random().toString(36).slice(2); }
+})();
+
+/* ---------- এনক্রিপশন (AES-GCM) ---------- */
+function toB64(buf) { let s = ''; const b = new Uint8Array(buf); for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s); }
+function fromB64(s) { const bin = atob(s); const b = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i); return b; }
+
+async function deriveKey(pw) {
+  const base = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: enc.encode(SALT), iterations: 150000, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function encryptText(t) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(t));
+  const out = new Uint8Array(12 + ct.byteLength);
+  out.set(iv, 0); out.set(new Uint8Array(ct), 12);
+  return toB64(out);
+}
+async function decryptText(b64) {
+  const b = fromB64(b64);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b.slice(0, 12) }, key, b.slice(12));
+  return dec.decode(pt);
+}
+
+/* ---------- Google Sheet-এর সাথে যোগাযোগ ---------- */
+async function apiGet() {
+  const r = await fetch(API_URL, { cache: 'no-store' });
+  return r.json();
+}
+async function apiPost(body) {
+  const r = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body)
+  });
+  return r.json();
+}
+
+/* ---------- সিঙ্ক ---------- */
+async function sync() {
+  const rows = await apiGet();
+  const out = [];
+  const seen = new Set();
+  for (const r of rows) {
+    if (deleted.has(r.id)) continue;
+    seen.add(r.id);
+    let text = cache.get(r.id);
+    if (text === undefined) {
+      try { text = await decryptText(r.data); } catch (e) { text = '⚠️ পড়া যায়নি'; }
+      cache.set(r.id, text);
+    }
+    out.push({ id: r.id, time: r.time, device: r.device, text });
+  }
+  // এখনো সার্ভারে না পৌঁছানো নোট ধরে রাখি
+  for (const m of messages) {
+    if (!seen.has(m.id) && (pending.has(m.id) || m.failed) && !deleted.has(m.id)) out.push(m);
+  }
+  out.sort((a, b) => a.time - b.time);
+  messages = out;
+  render();
+}
+
+/* ---------- রঙ ---------- */
+const PALETTE = ['#dbeafe', '#fde2e4', '#fef3c7', '#ede9fe', '#cffafe', '#fee2e2'];
+function colorFor(dev) {
+  let h = 0;
+  for (let i = 0; i < dev.length; i++) h = (h * 31 + dev.charCodeAt(i)) >>> 0;
+  return PALETTE[h % PALETTE.length];
+}
+
+/* ---------- দেখানো ---------- */
+function nearBottom() {
+  const l = $('list');
+  return l.scrollHeight - l.scrollTop - l.clientHeight < 120;
+}
+function render() {
+  const l = $('list');
+  const stick = nearBottom();
+  l.innerHTML = '';
+  if (!messages.length) {
+    const e = document.createElement('div');
+    e.className = 'empty'; e.textContent = 'এখনো কোনো নোট নেই। নিচে লিখুন।';
+    l.appendChild(e);
+    return;
+  }
+  let lastDay = '';
+  for (const m of messages) {
+    const d = new Date(m.time);
+    const day = d.toLocaleDateString('bn-BD', { day: 'numeric', month: 'long', year: 'numeric' });
+    if (day !== lastDay) {
+      const s = document.createElement('div');
+      s.className = 'day'; s.textContent = day;
+      l.appendChild(s);
+      lastDay = day;
+    }
+    const mine = m.device === myDevice;
+    const b = document.createElement('div');
+    b.className = 'bubble ' + (mine ? 'mine' : 'other') + (m.failed ? ' failed' : '');
+    if (!mine) b.style.background = colorFor(m.device);
+
+    const t = document.createElement('div');
+    t.textContent = m.text;
+    b.appendChild(t);
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const who = document.createElement('span');
+    who.className = 'who'; who.textContent = mine ? 'এই ডিভাইস' : 'অন্য ডিভাইস';
+    const tm = document.createElement('span');
+    tm.textContent = m.failed ? 'সেভ হয়নি, চাপুন' : (pending.has(m.id) ? '⏳' : d.toLocaleTimeString('bn-BD', { hour: 'numeric', minute: '2-digit' }));
+    const x = document.createElement('span');
+    x.className = 'del'; x.textContent = '✕'; x.title = 'মুছুন';
+    x.onclick = ev => { ev.stopPropagation(); removeMsg(m.id); };
+    meta.append(who, tm, x);
+    b.appendChild(meta);
+
+    if (m.failed) b.onclick = () => retry(m.id);
+    l.appendChild(b);
+  }
+  if (stick) l.scrollTop = l.scrollHeight;
+}
+
+/* ---------- পাঠানো, মোছা ---------- */
+async function pushToServer(m) {
+  try {
+    const data = await encryptText(m.text);
+    await apiPost({ action: 'add', id: m.id, time: m.time, device: m.device, data });
+    pending.delete(m.id);
+    m.failed = false;
+  } catch (e) {
+    pending.delete(m.id);
+    m.failed = true;
+  }
+  render();
+}
+async function send() {
+  const ta = $('ta');
+  const text = ta.value.trim();
+  if (!text) return;
+  ta.value = ''; ta.style.height = 'auto';
+  const m = { id: 'm' + Date.now() + Math.random().toString(36).slice(2, 7), time: Date.now(), device: myDevice, text };
+  cache.set(m.id, text);
+  pending.add(m.id);
+  messages.push(m);
+  render();
+  $('list').scrollTop = $('list').scrollHeight;
+  pushToServer(m);
+}
+function retry(id) {
+  const m = messages.find(x => x.id === id);
+  if (!m) return;
+  m.failed = false; pending.add(id); render();
+  pushToServer(m);
+}
+async function removeMsg(id) {
+  if (!confirm('এই নোটটা মুছে ফেলবেন?')) return;
+  deleted.add(id);
+  messages = messages.filter(m => m.id !== id);
+  render();
+  try { await apiPost({ action: 'del', id }); } catch (e) { /* পরের সিঙ্কে আবার আসবে */ deleted.delete(id); }
+}
+
+/* ---------- লগইন ---------- */
+async function login(pw, auto) {
+  if (!pw) return;
+  if (API_URL.indexOf('PASTE_') === 0) { $('err').textContent = 'আগে কোডের ভেতর API_URL বসান।'; return; }
+  const btn = $('enter');
+  btn.disabled = true; $('err').textContent = auto ? '' : 'যাচাই হচ্ছে...';
+  try {
+    key = await deriveKey(pw);
+    const rows = await apiGet();
+    if (rows.length) {
+      try { await decryptText(rows[rows.length - 1].data); }
+      catch (e) { key = null; sessionStorage.removeItem('gn_pw'); $('err').textContent = 'ভুল পাসওয়ার্ড'; btn.disabled = false; return; }
+    }
+    try { sessionStorage.setItem('gn_pw', pw); } catch (e) {}
+    $('lock').classList.add('hidden');
+    $('app').classList.remove('hidden');
+    await sync();
+    $('list').scrollTop = $('list').scrollHeight;
+    timer = setInterval(() => { if (!document.hidden) sync().catch(() => {}); }, POLL_MS);
+  } catch (e) {
+    $('err').textContent = 'সংযোগ হয়নি। ইন্টারনেট বা API_URL দেখুন।';
+  }
+  btn.disabled = false;
+}
+
+/* ---------- ইভেন্ট ---------- */
+$('enter').onclick = () => login($('pw').value, false);
+$('pw').addEventListener('keydown', e => { if (e.key === 'Enter') login($('pw').value, false); });
+$('form').addEventListener('submit', e => { e.preventDefault(); send(); });
+$('ta').addEventListener('input', e => { const t = e.target; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 120) + 'px'; });
+$('ta').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } });
+$('lockBtn').onclick = () => { try { sessionStorage.removeItem('gn_pw'); } catch (e) {} location.reload(); };
+document.addEventListener('visibilitychange', () => { if (!document.hidden && key) sync().catch(() => {}); });
+
+/* আগে একই ট্যাবে খোলা থাকলে নিজে থেকেই ঢুকবে */
+try { const saved = sessionStorage.getItem('gn_pw'); if (saved) login(saved, true); } catch (e) {}
+</script>
+</body>
+</html>
