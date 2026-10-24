@@ -1,90 +1,438 @@
-// Google Apps Script - গোপন নোটের ব্যাকএন্ড
-// নোট: Google Sheet-এ (এনক্রিপ্টেড)   |   ছবি: Google Drive-এ (এনক্রিপ্টেড)
-
-const SHEET_NAME = 'Notes';
-const FOLDER_NAME = 'GoponNoteFiles';
-
-function getSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let s = ss.getSheetByName(SHEET_NAME);
-  if (!s) {
-    s = ss.insertSheet(SHEET_NAME);
-    s.appendRow(['id', 'time', 'device', 'data']);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>🔒</title>
+<style>
+  :root{
+    --bg:#efeae2; --bar:#075e54; --card:#ffffff; --text:#1f2937; --muted:#6b7280;
+    --mine:#d9fdd3;
   }
-  return s;
-}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);}
+  .hidden{display:none !important}
 
-function folder_() {
-  const it = DriveApp.getFoldersByName(FOLDER_NAME);
-  return it.hasNext() ? it.next() : DriveApp.createFolder(FOLDER_NAME);
-}
+  /* ---------- লগইন ---------- */
+  #lock{min-height:100%;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(135deg,#075e54,#128c7e)}
+  .box{background:var(--card);padding:28px 24px;border-radius:16px;width:100%;max-width:360px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  .box h1{margin:0 0 6px;font-size:28px}
+  .box p{margin:0 0 18px;color:var(--muted);font-size:14px}
+  .box input{width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:10px;font:inherit;font-size:16px;margin-bottom:12px}
+  .box button{width:100%;padding:12px;border:0;border-radius:10px;background:var(--bar);color:#fff;font:inherit;font-size:16px;cursor:pointer}
+  .box button:disabled{opacity:.6}
+  #err{color:#b91c1c;font-size:14px;min-height:20px;margin-top:10px}
 
-function isOurFile_(f) {
-  const n = f.getName();
-  return n.indexOf('gn-') === 0 && n.slice(-4) === '.enc';
-}
+  /* ---------- অ্যাপ ---------- */
+  #app{height:100%;display:flex;flex-direction:column}
+  header{background:var(--bar);color:#fff;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:max(10px,env(safe-area-inset-top))}
+  header b{font-size:20px}
+  header .btns{display:flex;gap:6px}
+  header button{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:8px;padding:6px 11px;font:inherit;font-size:15px;cursor:pointer}
+  #list{flex:1;overflow-y:auto;padding:12px 10px;display:flex;flex-direction:column;gap:6px}
+  .day{align-self:center;background:#e1f2fb;color:#475569;font-size:12px;padding:3px 12px;border-radius:999px;margin:8px 0}
+  .empty{align-self:center;color:var(--muted);margin-top:40px;font-size:14px}
 
-function json_(obj) {
-  return ContentService.createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
-}
+  .bubble{max-width:82%;padding:7px 10px 5px;border-radius:12px;box-shadow:0 1px 1px rgba(0,0,0,.12);word-wrap:break-word;overflow-wrap:anywhere;white-space:pre-wrap;line-height:1.5;font-size:16px}
+  .bubble.mine{align-self:flex-end;background:var(--mine);border-top-right-radius:2px}
+  .bubble.other{align-self:flex-start;border-top-left-radius:2px}
+  .meta{display:flex;justify-content:flex-end;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-top:2px;white-space:normal}
+  .meta .who{font-weight:600}
+  .meta .del{cursor:pointer;opacity:.6}
+  .meta .del:hover{opacity:1;color:#b91c1c}
+  .bubble.failed{outline:2px solid #ef4444;cursor:pointer}
 
-function doGet(e) {
-  // ছবির এনক্রিপ্টেড ফাইল চাইলে
-  if (e && e.parameter && e.parameter.file) {
-    try {
-      const f = DriveApp.getFileById(e.parameter.file);
-      if (!isOurFile_(f)) return ContentService.createTextOutput('');
-      return ContentService.createTextOutput(f.getBlob().getDataAsString());
-    } catch (err) {
-      return ContentService.createTextOutput('');
-    }
-  }
-  // নোটের তালিকা
-  const rows = getSheet_().getDataRange().getValues().slice(1).map(function (r) {
-    return { id: String(r[0]), time: Number(r[1]), device: String(r[2]), data: String(r[3]) };
-  });
-  return json_(rows);
-}
+  .pic{display:block;max-width:100%;max-height:300px;min-width:120px;min-height:80px;border-radius:8px;background:#e5e7eb;cursor:zoom-in;color:var(--muted);font-size:12px}
+  .callbtn{margin-top:6px;border:0;border-radius:8px;padding:7px 16px;background:var(--bar);color:#fff;font:inherit;font-size:14px;cursor:pointer}
 
-function doPost(e) {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(30000);
+  #viewer{position:fixed;inset:0;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;z-index:50;cursor:zoom-out}
+  #viewer img{max-width:96%;max-height:96%;border-radius:6px}
+
+  form{display:flex;gap:8px;padding:8px 10px;background:#f0f2f5;padding-bottom:max(8px,env(safe-area-inset-bottom))}
+  textarea{flex:1;resize:none;border:0;border-radius:20px;padding:10px 14px;font:inherit;font-size:16px;max-height:120px;min-height:44px;outline:none}
+  form button{border:0;border-radius:50%;width:46px;height:46px;background:var(--bar);color:#fff;font-size:20px;cursor:pointer;align-self:flex-end}
+  form button.attach{background:#fff;color:var(--bar);box-shadow:0 1px 2px rgba(0,0,0,.15)}
+</style>
+</head>
+<body>
+
+<!-- পাসওয়ার্ড পর্দা -->
+<div id="lock">
+  <div class="box">
+    <h1>🔒</h1>
+    <p>Enter password to open</p>
+    <input id="pw" type="password" placeholder="Password" autocomplete="current-password">
+    <button id="enter">Open</button>
+    <div id="err"></div>
+  </div>
+</div>
+
+<!-- মূল অ্যাপ -->
+<div id="app" class="hidden">
+  <header>
+    <b>🔒</b>
+    <div class="btns">
+      <button id="callV" title="Voice call">📞</button>
+      <button id="callVid" title="Video call">🎥</button>
+      <button id="lockBtn">Lock</button>
+    </div>
+  </header>
+  <div id="list"></div>
+  <form id="form">
+    <button type="button" class="attach" id="attach" aria-label="Photo">📎</button>
+    <input type="file" id="file" accept="image/*" hidden>
+    <textarea id="ta" rows="1" maxlength="3000" placeholder="Write a note..."></textarea>
+    <button type="submit" aria-label="Send">➤</button>
+  </form>
+</div>
+
+<div id="viewer" class="hidden"><img id="viewerImg" alt=""></div>
+
+<script>
+/* ============ সেটিংস ============ */
+const API_URL = 'https://script.google.com/macros/s/AKfycbwX8yKc-If4xp08pCor3V16yvZC7dVPVqyZAdKNb3NYZ4AwPkmVxoN6gM4ctoBwbKtP/exec';
+const SALT = 'gopon-note-v1-salt';   // সব ডিভাইসে একই থাকতে হবে, বদলাবেন না
+const POLL_MS = 5000;                // কত সেকেন্ড পর পর নতুন নোট দেখবে
+const IMG_MAX = 1280;                // ছবির সর্বোচ্চ মাপ (পিক্সেল)
+const IMG_QUALITY = 0.72;            // ছবির মান (০ থেকে ১)
+/* ================================= */
+
+const enc = new TextEncoder(), dec = new TextDecoder();
+const $ = id => document.getElementById(id);
+let key = null;
+let room = '';
+let messages = [];
+let lastSig = '';
+const cache = new Map();     // id -> পেলোড অবজেক্ট
+const imgUrls = new Map();   // id -> ছবির blob URL
+const loading = new Set();   // যে ছবি লোড হচ্ছে
+const pending = new Set();   // সার্ভারে যায়নি এমন নোট
+const deleted = new Set();   // ডিলিট করা নোট
+let timer = null;
+
+/* এই ডিভাইসের পরিচয় (প্রতিটি ডিভাইসে আলাদা) */
+const myDevice = (function () {
   try {
-    const b = JSON.parse(e.postData.contents);
-
-    if (b.action === 'upload') {
-      const name = 'gn-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '.enc';
-      const f = folder_().createFile(name, String(b.data), MimeType.PLAIN_TEXT);
-      return json_({ ok: true, fid: f.getId() });
+    let d = localStorage.getItem('gn_device');
+    if (!d) {
+      d = 'd-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now() + Math.random().toString(36).slice(2));
+      localStorage.setItem('gn_device', d);
     }
+    return d;
+  } catch (e) { return 'd-tmp-' + Math.random().toString(36).slice(2); }
+})();
 
-    const sheet = getSheet_();
-
-    if (b.action === 'add') {
-      sheet.appendRow([String(b.id), Number(b.time), String(b.device), String(b.data)]);
-      return json_({ ok: true });
-    }
-
-    if (b.action === 'del') {
-      const ids = sheet.getRange(1, 1, sheet.getLastRow(), 1).getValues();
-      for (let i = ids.length - 1; i >= 1; i--) {
-        if (String(ids[i][0]) === String(b.id)) {
-          sheet.deleteRow(i + 1);
-          break;
-        }
-      }
-      if (b.fid) {
-        try {
-          const f = DriveApp.getFileById(String(b.fid));
-          if (isOurFile_(f)) f.setTrashed(true);
-        } catch (err) {}
-      }
-      return json_({ ok: true });
-    }
-
-    return json_({ ok: false });
-  } finally {
-    lock.releaseLock();
-  }
+/* ---------- এনক্রিপশন (AES-GCM) ---------- */
+function toB64(buf) {
+  const b = new Uint8Array(buf); let s = '';
+  for (let i = 0; i < b.length; i += 8192) s += String.fromCharCode.apply(null, b.subarray(i, i + 8192));
+  return btoa(s);
 }
+function fromB64(s) { const bin = atob(s); const b = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i); return b; }
+
+async function deriveKey(pw) {
+  const base = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: enc.encode(SALT), iterations: 150000, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function encryptBytes(bytes) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, bytes);
+  const out = new Uint8Array(12 + ct.byteLength);
+  out.set(iv, 0); out.set(new Uint8Array(ct), 12);
+  return toB64(out);
+}
+async function decryptBytes(b64) {
+  const b = fromB64(b64);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b.slice(0, 12) }, key, b.slice(12));
+  return new Uint8Array(pt);
+}
+const encryptText = t => encryptBytes(enc.encode(t));
+const decryptText = async b64 => dec.decode(await decryptBytes(b64));
+
+/* কল-রুমের নাম: পাসওয়ার্ড থেকে তৈরি, তাই শুধু পাসওয়ার্ড জানা লোকই একই রুমে যাবে */
+async function roomFor(pw) {
+  const h = await crypto.subtle.digest('SHA-256', enc.encode(SALT + ':room:' + pw));
+  return 'gn' + Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 20);
+}
+function callUrl(video) {
+  return 'https://meet.jit.si/' + room + '#config.startWithVideoMuted=' + (video ? 'false' : 'true');
+}
+
+/* পেলোড: সাধারণ লেখা, নইলে {"gn":1,"type":"img"|"call",...} */
+function parsePayload(s) {
+  if (s.indexOf('{"gn":1') === 0) {
+    try { const o = JSON.parse(s); if (o && o.type) return o; } catch (e) {}
+  }
+  return { type: 'txt', x: s };
+}
+
+/* ---------- Google Sheet/Drive-এর সাথে যোগাযোগ ---------- */
+async function apiGet() {
+  const r = await fetch(API_URL, { cache: 'no-store' });
+  return r.json();
+}
+async function apiPost(body) {
+  const r = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body)
+  });
+  return r.json();
+}
+
+/* ---------- সিঙ্ক ---------- */
+async function sync() {
+  const rows = await apiGet();
+  const out = [];
+  const seen = new Set();
+  for (const r of rows) {
+    if (deleted.has(r.id)) continue;
+    seen.add(r.id);
+    let p = cache.get(r.id);
+    if (p === undefined) {
+      try { p = parsePayload(await decryptText(r.data)); } catch (e) { p = { type: 'txt', x: '⚠️ Could not read' }; }
+      cache.set(r.id, p);
+    }
+    out.push({ id: r.id, time: r.time, device: r.device, p });
+  }
+  // এখনো সার্ভারে না পৌঁছানো নোট ধরে রাখি
+  for (const m of messages) {
+    if (!seen.has(m.id) && (pending.has(m.id) || m.failed) && !deleted.has(m.id)) out.push(m);
+  }
+  out.sort((a, b) => a.time - b.time);
+  messages = out;
+  render();
+}
+
+/* ---------- রঙ ---------- */
+const PALETTE = ['#dbeafe', '#fde2e4', '#fef3c7', '#ede9fe', '#cffafe', '#fee2e2'];
+function colorFor(dev) {
+  let h = 0;
+  for (let i = 0; i < dev.length; i++) h = (h * 31 + dev.charCodeAt(i)) >>> 0;
+  return PALETTE[h % PALETTE.length];
+}
+
+/* ---------- ছবি লোড ---------- */
+async function loadImg(m) {
+  if (!m.p.fid || imgUrls.has(m.id) || loading.has(m.id)) return;
+  loading.add(m.id);
+  try {
+    const r = await fetch(API_URL + '?file=' + encodeURIComponent(m.p.fid), { cache: 'no-store' });
+    const t = await r.text();
+    const bytes = await decryptBytes(t);
+    imgUrls.set(m.id, URL.createObjectURL(new Blob([bytes], { type: 'image/jpeg' })));
+    render(true);
+  } catch (e) { /* পরের বার আবার চেষ্টা হবে */ }
+  loading.delete(m.id);
+}
+function openViewer(src) {
+  if (!src) return;
+  $('viewerImg').src = src;
+  $('viewer').classList.remove('hidden');
+}
+
+/* ---------- দেখানো ---------- */
+function nearBottom() {
+  const l = $('list');
+  return l.scrollHeight - l.scrollTop - l.clientHeight < 120;
+}
+function render(force) {
+  const sig = messages.map(m => m.id + (m.failed ? 'f' : '') + (pending.has(m.id) ? 'p' : '') + (imgUrls.has(m.id) ? 'i' : '')).join('|');
+  if (!force && sig === lastSig) return;
+  lastSig = sig;
+
+  const l = $('list');
+  const stick = nearBottom();
+  l.innerHTML = '';
+  if (!messages.length) {
+    const e = document.createElement('div');
+    e.className = 'empty'; e.textContent = 'No notes yet. Write one below.';
+    l.appendChild(e);
+    return;
+  }
+  let lastDay = '';
+  for (const m of messages) {
+    const d = new Date(m.time);
+    const day = d.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+    if (day !== lastDay) {
+      const s = document.createElement('div');
+      s.className = 'day'; s.textContent = day;
+      l.appendChild(s);
+      lastDay = day;
+    }
+    const mine = m.device === myDevice;
+    const b = document.createElement('div');
+    b.className = 'bubble ' + (mine ? 'mine' : 'other') + (m.failed ? ' failed' : '');
+    if (!mine) b.style.background = colorFor(m.device);
+
+    const p = m.p;
+    if (p.type === 'img') {
+      const img = document.createElement('img');
+      img.className = 'pic'; img.alt = 'Loading photo...';
+      const u = imgUrls.get(m.id);
+      if (u) { img.src = u; img.onclick = ev => { ev.stopPropagation(); openViewer(u); }; }
+      else loadImg(m);
+      b.appendChild(img);
+    } else if (p.type === 'call') {
+      const t = document.createElement('div');
+      t.textContent = p.video ? '🎥 Video call started' : '📞 Voice call started';
+      b.appendChild(t);
+      const btn = document.createElement('button');
+      btn.className = 'callbtn'; btn.textContent = 'Join';
+      btn.onclick = ev => { ev.stopPropagation(); window.open(callUrl(!!p.video), '_blank', 'noopener'); };
+      b.appendChild(btn);
+    } else {
+      const t = document.createElement('div');
+      t.textContent = p.x;
+      b.appendChild(t);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const tm = document.createElement('span');
+    tm.textContent = m.failed ? 'Not saved, tap to retry' : (pending.has(m.id) ? '⏳' : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
+    const x = document.createElement('span');
+    x.className = 'del'; x.textContent = '✕'; x.title = 'Delete';
+    x.onclick = ev => { ev.stopPropagation(); removeMsg(m.id); };
+    meta.append(tm, x);
+    b.appendChild(meta);
+
+    if (m.failed) b.onclick = () => retry(m.id);
+    l.appendChild(b);
+  }
+  if (stick) l.scrollTop = l.scrollHeight;
+}
+
+/* ---------- পাঠানো, মোছা ---------- */
+async function pushToServer(m) {
+  try {
+    if (m.p.type === 'img' && !m.p.fid) {
+      const bytes = new Uint8Array(await m._blob.arrayBuffer());
+      const r = await apiPost({ action: 'upload', data: await encryptBytes(bytes) });
+      if (!r || !r.ok) throw new Error('upload');
+      m.p.fid = r.fid;
+    }
+    const payload = m.p.type === 'txt' ? m.p.x : JSON.stringify(m.p);
+    const data = await encryptText(payload);
+    const r2 = await apiPost({ action: 'add', id: m.id, time: m.time, device: m.device, data });
+    if (!r2 || !r2.ok) throw new Error('add');
+    pending.delete(m.id);
+    m.failed = false;
+  } catch (e) {
+    pending.delete(m.id);
+    m.failed = true;
+  }
+  render();
+}
+function queue(p, extra) {
+  const m = { id: 'm' + Date.now() + Math.random().toString(36).slice(2, 7), time: Date.now(), device: myDevice, p };
+  if (extra) Object.assign(m, extra);
+  cache.set(m.id, p);
+  pending.add(m.id);
+  messages.push(m);
+  render();
+  $('list').scrollTop = $('list').scrollHeight;
+  pushToServer(m);
+  return m;
+}
+function send() {
+  const ta = $('ta');
+  const text = ta.value.trim();
+  if (!text) return;
+  ta.value = ''; ta.style.height = 'auto';
+  queue({ type: 'txt', x: text });
+}
+function compressImage(file) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let w = img.naturalWidth, h = img.naturalHeight;
+      const s = Math.min(1, IMG_MAX / Math.max(w, h));
+      w = Math.round(w * s); h = Math.round(h * s);
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      c.toBlob(b => b ? res(b) : rej(new Error('blob')), 'image/jpeg', IMG_QUALITY);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('img')); };
+    img.src = url;
+  });
+}
+async function sendImage(file) {
+  try {
+    const blob = await compressImage(file);
+    const m = queue({ type: 'img', gn: 1, fid: '' }, { _blob: blob });
+    imgUrls.set(m.id, URL.createObjectURL(blob));
+    render(true);
+  } catch (e) { alert('Could not send this photo. Try another one.'); }
+}
+function startCall(video) {
+  window.open(callUrl(video), '_blank', 'noopener');
+  queue({ gn: 1, type: 'call', video: !!video });
+}
+function retry(id) {
+  const m = messages.find(x => x.id === id);
+  if (!m) return;
+  m.failed = false; pending.add(id); render(true);
+  pushToServer(m);
+}
+async function removeMsg(id) {
+  if (!confirm('Delete this?')) return;
+  const m = messages.find(x => x.id === id);
+  deleted.add(id);
+  messages = messages.filter(x => x.id !== id);
+  render(true);
+  try { await apiPost({ action: 'del', id, fid: (m && m.p && m.p.fid) || '' }); }
+  catch (e) { deleted.delete(id); /* পরের সিঙ্কে আবার আসবে */ }
+}
+
+/* ---------- লগইন ---------- */
+async function login(pw, auto) {
+  if (!pw) return;
+  if (API_URL.indexOf('PASTE_') === 0) { $('err').textContent = 'Set API_URL in the code first.'; return; }
+  const btn = $('enter');
+  btn.disabled = true; $('err').textContent = auto ? '' : 'Checking...';
+  try {
+    key = await deriveKey(pw);
+    room = await roomFor(pw);
+    const rows = await apiGet();
+    if (rows.length) {
+      try { await decryptText(rows[rows.length - 1].data); }
+      catch (e) { key = null; try { sessionStorage.removeItem('gn_pw'); } catch (e2) {} $('err').textContent = 'Wrong password'; btn.disabled = false; return; }
+    }
+    try { sessionStorage.setItem('gn_pw', pw); } catch (e) {}
+    $('lock').classList.add('hidden');
+    $('app').classList.remove('hidden');
+    await sync();
+    $('list').scrollTop = $('list').scrollHeight;
+    timer = setInterval(() => { if (!document.hidden) sync().catch(() => {}); }, POLL_MS);
+  } catch (e) {
+    $('err').textContent = 'Could not connect. Check internet or API_URL.';
+  }
+  btn.disabled = false;
+}
+
+/* ---------- ইভেন্ট ---------- */
+$('enter').onclick = () => login($('pw').value, false);
+$('pw').addEventListener('keydown', e => { if (e.key === 'Enter') login($('pw').value, false); });
+$('form').addEventListener('submit', e => { e.preventDefault(); send(); });
+$('ta').addEventListener('input', e => { const t = e.target; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 120) + 'px'; });
+$('ta').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } });
+$('attach').onclick = () => $('file').click();
+$('file').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) sendImage(f); });
+$('callV').onclick = () => startCall(false);
+$('callVid').onclick = () => startCall(true);
+$('viewer').onclick = () => { $('viewer').classList.add('hidden'); $('viewerImg').src = ''; };
+$('lockBtn').onclick = () => { try { sessionStorage.removeItem('gn_pw'); } catch (e) {} location.reload(); };
+document.addEventListener('visibilitychange', () => { if (!document.hidden && key) sync().catch(() => {}); });
+
+/* আগে একই ট্যাবে খোলা থাকলে নিজে থেকেই ঢুকবে */
+try { const saved = sessionStorage.getItem('gn_pw'); if (saved) login(saved, true); } catch (e) {}
+</script>
+</body>
+</html>
