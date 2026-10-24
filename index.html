@@ -22,7 +22,7 @@
   .box input{width:100%;padding:12px 14px;border:1px solid #d1d5db;border-radius:10px;font:inherit;font-size:16px;margin-bottom:12px}
   .box button{width:100%;padding:12px;border:0;border-radius:10px;background:var(--bar);color:#fff;font:inherit;font-size:16px;cursor:pointer}
   .box button:disabled{opacity:.6}
-  #err{color:#b91c1c;font-size:14px;min-height:20px;margin-top:10px}
+  #err{color:#b91c1c;font-size:14px;min-height:20px;margin-top:10px;word-break:break-all;user-select:all}
 
   /* ---------- app ---------- */
   #app{height:100%;display:flex;flex-direction:column}
@@ -97,6 +97,7 @@ const IMG_QUALITY = 0.72;            // photo quality (0 to 1)
 const VIDEO_MAX_MB = 15;             // max video size
 const VOICE_MAX_SEC = 300;           // max voice message length
 const PLACEHOLDER = 'Write a note...';
+const PW_HASH = '';                  // paste your password hash here (see instructions)
 /* ================================== */
 
 const enc = new TextEncoder(), dec = new TextDecoder();
@@ -137,6 +138,13 @@ async function deriveKey(pw) {
   return crypto.subtle.deriveKey(
     { name: 'PBKDF2', salt: enc.encode(SALT), iterations: 150000, hash: 'SHA-256' },
     base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+/* password check code (not the password itself) */
+async function pwHash(pw) {
+  const base = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: enc.encode(SALT + ':check'), iterations: 150000, hash: 'SHA-256' }, base, 256);
+  return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 async function encryptBytes(bytes) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -469,6 +477,17 @@ async function login(pw, auto) {
   const btn = $('enter');
   btn.disabled = true; $('err').textContent = auto ? '' : 'Checking...';
   try {
+    if (location.hash === '#hash') {
+      $('err').textContent = 'Hash: ' + await pwHash(pw);
+      btn.disabled = false;
+      return;
+    }
+    if (PW_HASH && (await pwHash(pw)) !== PW_HASH) {
+      try { sessionStorage.removeItem('gn_pw'); } catch (e2) {}
+      $('err').textContent = 'Wrong password';
+      btn.disabled = false;
+      return;
+    }
     key = await deriveKey(pw);
     const rows = await apiGet();
     if (rows.length) {
